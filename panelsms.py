@@ -48,6 +48,30 @@ def detect_v3_api(base_url: str, timeout: int = 15) -> str:
             continue
     return ""
 
+
+def detect_v6_api(base_url: str, timeout: int = 15) -> str:
+    """teleroutex-style: {origin}/api or https://server.{host}/api with /settings JSON."""
+    from urllib.parse import urlparse
+    p = urlparse(base_url)
+    origin = f"{p.scheme}://{p.netloc}"
+    cands = [origin + "/api"]
+    if not p.hostname.startswith("server."):
+        cands.append(f"{p.scheme}://server.{p.hostname}/api")
+    for cand in cands:
+        try:
+            r = requests.get(cand + "/settings", timeout=timeout,
+                             headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code == 200:
+                try:
+                    d = r.json()
+                    if isinstance(d, dict):
+                        return cand
+                except Exception:
+                    pass
+        except Exception:
+            continue
+    return ""
+
 log = logging.getLogger("panelsms")
 
 
@@ -190,11 +214,18 @@ class PanelClient:
             if self.api_base:
                 self.flavor = "v3"
             else:
-                # protected SPA (v4) -> real browser login
-                from browser_panel import browser_login
-                browser_login(self.base_url, self.username, self.password)
-                self.flavor = "v4"
-                return True
+                v6api = detect_v6_api(self.base_url, timeout=self.timeout)
+                if v6api:
+                    self.api_base = v6api
+                    self.flavor = "v6"
+                else:
+                    # protected SPA (v4) -> real browser login
+                    from browser_panel import browser_login
+                    browser_login(self.base_url, self.username, self.password)
+                    self.flavor = "v4"
+                    return True
+        if self.flavor == "v6":
+            return self._v6_login()
         if self.flavor == "v4":
             from browser_panel import browser_login
             browser_login(self.base_url, self.username, self.password)
@@ -242,6 +273,10 @@ class PanelClient:
             return
         if self.flavor in ("v4", "v5"):
             return  # browser page / token-per-request
+        if self.flavor == "v6":
+            if not self._v3_token:
+                self._v6_login()
+            return
         if self.flavor == "v3":
             if not self._v3_token:
                 self._v3_login()
@@ -260,7 +295,90 @@ class PanelClient:
         self.ensure_logged_in()
         return True
 
-    # ----- v3 (React REST API) -----
+    # ----- v6 (teleroutex REST: {api}/user/login, MDR success-report) -----
+    def _v6_login(self) -> bool:
+        if not self.api_base:
+            self.api_base = detect_v6_api(self.base_url, timeout=self.timeout)
+        if not self.api_base:
+            raise LoginError("v6 API পাওয়া যায়নি")
+        r = self.session.post(
+            self.api_base + "/user/login",
+            json={"identifier": self.username, "password": self.password},
+            timeout=self.timeout,
+            headers={"Origin": self._origin, "Referer": self.base_url + "/auth/login"})
+        if r.status_code == 401:
+            raise LoginError("login rejected (ভুল user/pass)")
+        try:
+            d = r.json()
+        except ValueError:
+            raise LoginError("login failed: " + r.text[:100])
+        doc = (d.get("data") or {}).get("doc", {}) if isinstance(d, dict) else {}
+        tok = doc.get("token", "") if isinstance(doc, dict) else ""
+        if not tok:
+            raise LoginError("login rejected: " + str((d.get("data") or {}).get("message") or "")[:120])
+        self._v3_token = tok
+        try:  # token DB te save — restart eo login thakbe
+            import sqlite3 as _sq
+            _con = _sq.connect("bot.db")
+            _con.execute("UPDATE panels SET api_token=? WHERE puser=? AND api_base=?",
+                         (tok, self.username, self.api_base))
+            _con.commit()
+            _con.close()
+        except Exception:
+            pass
+        return True
+
+    def _v6_get(self, path: str, params: dict = None):
+        if not self._v3_token:
+            self._v6_login()
+        r = self.session.get(self.api_base + path, params=params or {},
+                             timeout=60,
+                             headers={"Authorization": f"Bearer {self._v3_token}"})
+        if r.status_code == 401 and not self._token_fixed:
+            self._v6_login()
+            r = self.session.get(self.api_base + path, params=params or {},
+                                 timeout=60,
+                                 headers={"Authorization": f"Bearer {self._v3_token}"})
+        if r.status_code == 401 and self._token_fixed:
+            raise LoginError("API token expired — notun token din")
+        r.raise_for_status()
+        return r.json()
+
+    def _fetch_cdr_v6(self, fdate1: str, fdate2: str, fnum: str = "", limit: int = 200):
+        rows = []
+        page = 1
+        import re as _re6
+        fd = _re6.sub(r"\D", "", fnum or "")
+        f1 = fdate1[:10] + "T00:00:00.000Z"
+        f2 = fdate2[:10] + "T23:59:00.000Z"
+        while True:
+            data = self._v6_get("/message-data-record/success-report", {
+                "pageSize": 100, "page": page, "from": f1, "to": f2,
+                "sortBy": "createdAt_descending"})
+            docs = ((data.get("data") or {}).get("docs")) if isinstance(data, dict) else None
+            if not docs:
+                break
+            for it in docs:
+                num = str(it.get("number") or "")
+                if fd and fd not in _re6.sub(r"\D", "", num):
+                    continue
+                term = it.get("termination") or {}
+                rows.append([
+                    str(it.get("createdAt") or ""),
+                    str(term.get("name") if isinstance(term, dict) else term or ""),
+                    num, str(it.get("cli") or ""), "",
+                    str(it.get("message") or ""),
+                    str(it.get("currencyCode") or ""), "", "", "",
+                ])
+                if len(rows) >= limit:
+                    break
+            if len(docs) < 100 or len(rows) >= limit:
+                break
+            page += 1
+            if page > 5:
+                break
+        return {"rows": rows, "totals": None}
+    # ----- v3 (React REST API, token) -----
     def _v3_login(self) -> bool:
         if not self.api_base:
             self.api_base = detect_v3_api(self.base_url, timeout=self.timeout)
@@ -403,6 +521,8 @@ class PanelClient:
 
     def fetch_cdr(self, fdate1: str, fdate2: str, fnum: str = "", limit: int = 200):
         self.ensure_logged_in()
+        if self.flavor == "v6":
+            return self._fetch_cdr_v6(fdate1, fdate2, fnum, limit)
         if self.flavor == "v5":
             return self._fetch_cdr_v5(fdate1, fdate2, fnum, limit)
         if self.flavor == "v4":
@@ -536,8 +656,8 @@ class PanelClient:
 
     def export_csv(self, fdate1: str, fdate2: str, fnum: str = "") -> bytes:
         self.ensure_logged_in()
-        if self.flavor in ("v3", "v4", "v5"):
-            raise LoginError("v3/v4/v5 panel export শীঘ্রই আসছে")
+        if self.flavor in ("v3", "v4", "v5", "v6"):
+            raise LoginError("API panel export শীঘ্রই আসছে")
         if self.flavor == "v2":
             data = {
                 "csrf_token": self._page_csrf(),
