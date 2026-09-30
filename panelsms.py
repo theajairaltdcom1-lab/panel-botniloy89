@@ -119,7 +119,7 @@ class PanelClient:
         self.flavor = flavor  # 'v1', 'v2', 'v3' or 'auto'
         self.api_base = (api_base or "").rstrip("/")
         self._v3_token = (api_token or "").strip()
-        self._token_fixed = bool(self._v3_token)
+        self._token_fixed = bool(self._v3_token) and not self.password
         self.session = requests.Session()
         if self.proxy:
             self.session.proxies = {"http": self.proxy, "https": self.proxy}
@@ -283,6 +283,15 @@ class PanelClient:
         if not tok:
             raise LoginError("login failed (token নেই)")
         self._v3_token = tok
+        try:  # token DB te save — restart eo login thakbe
+            import sqlite3 as _sq
+            _con = _sq.connect("bot.db")
+            _con.execute("UPDATE panels SET api_token=? WHERE puser=? AND api_base=?",
+                         (tok, self.username, self.api_base))
+            _con.commit()
+            _con.close()
+        except Exception:
+            pass
         return True
 
     # ----- v5 (token messages API: GET {base}/messages?token=..) -----
