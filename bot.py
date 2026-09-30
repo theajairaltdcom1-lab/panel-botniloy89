@@ -1361,9 +1361,8 @@ async def fj_group_link(ctx):
 
 async def fj_keyboard_ctx(ctx):
     kb = []
-    c1 = get_setting("channel_1", "")
-    if c1:
-        kb.append([InlineKeyboardButton("📢 Join Channel 1", url=f"https://t.me/{c1.lstrip('@')}")])
+    c1 = get_setting("channel_1", "") or FJ_DEFAULT_CHANNEL
+    kb.append([InlineKeyboardButton("📢 Join Channel 1", url=f"https://t.me/{c1.lstrip('@')}")])
     glink, gtitle = await fj_group_link(ctx)
     if glink:
         kb.append([InlineKeyboardButton("📢 Join OTP Group", url=glink)])
@@ -1375,19 +1374,18 @@ async def fj_keyboard_ctx(ctx):
 
 def fj_keyboard():
     kb = []
-    c1 = get_setting("channel_1", "")
-    if c1:
-        kb.append([InlineKeyboardButton("📢 Join Channel 1", url=f"https://t.me/{c1.lstrip('@')}")])
+    c1 = get_setting("channel_1", "") or FJ_DEFAULT_CHANNEL
+    kb.append([InlineKeyboardButton("📢 Join Channel 1", url=f"https://t.me/{c1.lstrip('@')}")])
     kb.append([InlineKeyboardButton("📢 Join OTP Group", callback_data="fj_noinvite")])
     kb.append([InlineKeyboardButton("✅ I've Joined", callback_data="fj_verify")])
     return InlineKeyboardMarkup(kb)
 
 
 async def fj_ok(ctx, uid: int) -> bool:
-    if get_setting("force_join", "OFF") != "ON":
+    if get_setting("force_join", "ON") != "ON":
         return True
     need = []
-    c1 = get_setting("channel_1", "").strip()
+    c1 = get_setting("channel_1", "").strip() or FJ_DEFAULT_CHANNEL
     if c1:
         need.append(c1 if c1.startswith("@") else "@" + c1)
     groups = get_otp_groups()
@@ -1405,6 +1403,7 @@ async def fj_ok(ctx, uid: int) -> bool:
     return True
 
 
+FJ_DEFAULT_CHANNEL = "@alltime_ns"
 FJ_TEXT = ("❌ Please join our channels first.\n\n"
            "Join Channel 1 + OTP Group below, then press I've Joined.")
 
