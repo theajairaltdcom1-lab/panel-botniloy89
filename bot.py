@@ -2463,6 +2463,11 @@ def _poll_panels_once(seen: set) -> list:
     pend_orders = [(o["id"], o["user_id"], _re.sub(r"\D", "", o["number"] or "")) for o in pend_orders]
     con.close()
     out = []
+    try:
+        _poll_panels_once.cycle = getattr(_poll_panels_once, "cycle", 0) + 1
+    except Exception:
+        pass
+    _cyc = getattr(_poll_panels_once, "cycle", 1)
     for p in panels:
         try:
             url = p["url"] if "url" in p.keys() else ""
@@ -2473,8 +2478,14 @@ def _poll_panels_once(seen: set) -> list:
         if not url or not pu:
             continue
         try:
+            _flv = _row_flavor(p) or "auto"
+        except Exception:
+            _flv = "auto"
+        if _flv == "v4" and (_cyc % 3 != 0):
+            continue  # browser panel proti 3rd poll e (fast rakhar jonno)
+        try:
             res = _get_client(p["id"], url, pu, pp, proxy=_row_proxy(p),
-                              flavor=_row_flavor(p), api_base=_row_api(p), api_token=_row_token(p)).fetch_cdr(fdate1, fdate2, limit=100)
+                              flavor=_row_flavor(p), api_base=_row_api(p), api_token=_row_token(p)).fetch_cdr(fdate1, fdate2, limit=50)
         except CooldownError:
             continue
         except Exception:
