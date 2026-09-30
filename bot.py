@@ -106,6 +106,14 @@ def init_db():
         c.commit()
     except Exception:
         pass
+    # self-heal: vul/unknown flavor reset (auto-detect abar cholbe)
+    try:
+        c.execute("UPDATE panels SET flavor='auto' WHERE flavor IS NULL OR flavor NOT IN "
+                  "('v1','v2','v3','v4','v5','v6','auto')")
+        c.execute("UPDATE panels SET api_base='' WHERE flavor='v6' AND (api_base IS NULL OR api_base='')")
+        c.commit()
+    except Exception:
+        pass
     con.commit()
     con.close()
 

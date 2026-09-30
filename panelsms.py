@@ -207,7 +207,7 @@ class PanelClient:
             self.login_url, timeout=self.timeout,
             headers={"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
         )
-        if self.flavor == "auto":
+        if self.flavor in ("auto", "maybe-v3"):
             self.flavor = detect_flavor(r.text)
         if self.flavor == "maybe-v3":
             self.api_base = self.api_base or detect_v3_api(self.base_url, timeout=self.timeout)
@@ -268,7 +268,7 @@ class PanelClient:
         return True
 
     def ensure_logged_in(self):
-        if self.flavor == "auto":
+        if self.flavor in ("auto", "maybe-v3"):
             self.login()
             return
         if self.flavor in ("v4", "v5"):
