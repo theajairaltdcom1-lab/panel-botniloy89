@@ -1775,9 +1775,6 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     if data.startswith("nb_cty:"):
         _, svc, code = data.split(":", 2)
-        if active_order(uid):
-            await q.message.reply_text("❌ আপনার active number আছে। age oita ses করুন।")
-            return
         try:
             want = max(1, min(20, int(get_setting("numbers_per_request", "3"))))
         except ValueError:
