@@ -301,9 +301,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⛔ You are banned.")
         return
     if not is_admin(u.id) and not await fj_ok(ctx, u.id):
-        await update.message.reply_text(
-            "❌ Please join our channels first.\n\nJoin both channels below, then press I've Joined.",
-            reply_markup=fj_keyboard())
+        await update.message.reply_text(FJ_TEXT, reply_markup=await fj_keyboard_ctx(ctx))
         return
     if is_admin(u.id):
         await update.message.reply_text("Select an option below 👇", reply_markup=admin_menu())
@@ -1345,14 +1343,42 @@ async def cmd_config(update, ctx):
     await update.message.reply_text(msg, reply_markup=kb)
 
 
+async def fj_group_link(ctx):
+    """Prothom OTP group er join link (username thakle)."""
+    groups = get_otp_groups()
+    if not groups:
+        return None, ""
+    cid, title = groups[0]
+    try:
+        chat = await ctx.bot.get_chat(cid)
+        uname = getattr(chat, "username", "")
+        if uname:
+            return f"https://t.me/{uname}", chat.title or title
+    except Exception:
+        pass
+    return None, title
+
+
+async def fj_keyboard_ctx(ctx):
+    kb = []
+    c1 = get_setting("channel_1", "")
+    if c1:
+        kb.append([InlineKeyboardButton("📢 Join Channel 1", url=f"https://t.me/{c1.lstrip('@')}")])
+    glink, gtitle = await fj_group_link(ctx)
+    if glink:
+        kb.append([InlineKeyboardButton("📢 Join OTP Group", url=glink)])
+    elif gtitle:
+        kb.append([InlineKeyboardButton("📢 Join OTP Group", callback_data="fj_noinvite")])
+    kb.append([InlineKeyboardButton("✅ I've Joined", callback_data="fj_verify")])
+    return InlineKeyboardMarkup(kb)
+
+
 def fj_keyboard():
     kb = []
     c1 = get_setting("channel_1", "")
-    c2 = get_setting("channel_2", "")
     if c1:
         kb.append([InlineKeyboardButton("📢 Join Channel 1", url=f"https://t.me/{c1.lstrip('@')}")])
-    if c2:
-        kb.append([InlineKeyboardButton("📢 Join Channel 2", url=f"https://t.me/{c2.lstrip('@')}")])
+    kb.append([InlineKeyboardButton("📢 Join OTP Group", callback_data="fj_noinvite")])
     kb.append([InlineKeyboardButton("✅ I've Joined", callback_data="fj_verify")])
     return InlineKeyboardMarkup(kb)
 
@@ -1360,17 +1386,27 @@ def fj_keyboard():
 async def fj_ok(ctx, uid: int) -> bool:
     if get_setting("force_join", "OFF") != "ON":
         return True
-    for key in ("channel_1", "channel_2"):
-        ch = get_setting(key, "").strip()
-        if not ch:
-            continue
+    need = []
+    c1 = get_setting("channel_1", "").strip()
+    if c1:
+        need.append(c1 if c1.startswith("@") else "@" + c1)
+    groups = get_otp_groups()
+    if groups:
+        need.append(groups[0][0])  # prothom OTP group
+    if not need:
+        return True
+    for ch in need:
         try:
-            m = await ctx.bot.get_chat_member(ch if ch.startswith("@") else "@" + ch, uid)
+            m = await ctx.bot.get_chat_member(ch, uid)
             if m.status in ("left", "kicked"):
                 return False
         except Exception:
             continue
     return True
+
+
+FJ_TEXT = ("❌ Please join our channels first.\n\n"
+           "Join Channel 1 + OTP Group below, then press I've Joined.")
 
 
 async def cmd_apipanels(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -1665,9 +1701,7 @@ def order_buttons(oid: int):
 async def cmd_numbers(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not is_admin(uid) and not await fj_ok(ctx, uid):
-        await update.message.reply_text(
-            "❌ Please join our channels first.\n\nJoin both channels below, then press I've Joined.",
-            reply_markup=fj_keyboard())
+        await update.message.reply_text(FJ_TEXT, reply_markup=await fj_keyboard_ctx(ctx))
         return
     con = db()
     rows = con.execute("SELECT * FROM orders WHERE user_id=? AND status='pending' ORDER BY id DESC LIMIT 5",
@@ -2008,8 +2042,10 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             else:
                 await q.message.reply_text("✅ Verified!", reply_markup=user_menu())
         else:
-            await q.message.reply_text("❌ Please join our channels first.",
-                                       reply_markup=fj_keyboard())
+            await q.message.reply_text(FJ_TEXT, reply_markup=await fj_keyboard_ctx(ctx))
+        return
+    if data == "fj_noinvite":
+        await q.answer("OTP group link admin er kache nin / group public korun.", show_alert=True)
         return
     if data.startswith("nb_refresh:"):
         oid = int(data.split(":")[1])
