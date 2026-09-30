@@ -300,6 +300,11 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if is_banned(u.id):
         await update.message.reply_text("⛔ You are banned.")
         return
+    if not is_admin(u.id) and not await fj_ok(ctx, u.id):
+        await update.message.reply_text(
+            "❌ Please join our channels first.\n\nJoin both channels below, then press I've Joined.",
+            reply_markup=fj_keyboard())
+        return
     if is_admin(u.id):
         await update.message.reply_text("Select an option below 👇", reply_markup=admin_menu())
     else:
@@ -870,6 +875,15 @@ async def handle_state(update: Update, ctx: ContextTypes.DEFAULT_TYPE, text: str
         ctx.user_data.clear()
         await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=admin_menu())
 
+    elif st == "cfg_channel":
+        key = ctx.user_data.get("cfg_key", "channel_1")
+        ch = text.strip()
+        if not ch.startswith("@"):
+            ch = "@" + ch
+        set_setting(key, ch)
+        ctx.user_data.clear()
+        await update.message.reply_text(f"✅ {key} → {ch}", reply_markup=admin_menu())
+
     elif st == "cfg_value":
         key = ctx.user_data.get("cfg_key", "")
         try:
@@ -1296,14 +1310,48 @@ async def cmd_config(update, ctx):
            f"⏱️ Poll Seconds: {get_setting('poll_seconds', str(_cfg.POLL_SECONDS))}\n"
            f"🎁 Referral Reward: {get_setting('ref_reward', str(_cfg.REF_REWARD))}\n"
            f"💸 Min Withdraw: {get_setting('min_withdraw', str(_cfg.MIN_WITHDRAW))}\n"
-           f"🔢 Numbers/Request: {get_setting('numbers_per_request', '1')}")
+           f"🔢 Numbers/Request: {get_setting('numbers_per_request', '3')}\n"
+           f"🔒 Force Join: {get_setting('force_join', 'OFF')}\n"
+           f"📢 Channel 1: {get_setting('channel_1', '-')}\n"
+           f"📢 Channel 2: {get_setting('channel_2', '-')}")
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("⏱️ Poll Seconds", callback_data="cfg_poll"),
          InlineKeyboardButton("🎁 Ref Reward", callback_data="cfg_ref")],
         [InlineKeyboardButton("💸 Min Withdraw", callback_data="cfg_min"),
          InlineKeyboardButton("🔢 Numbers/Req", callback_data="cfg_npr")],
+        [InlineKeyboardButton("🔒 Force Join ON/OFF", callback_data="cfg_fj")],
+        [InlineKeyboardButton("📢 Channel 1", callback_data="cfg_ch1"),
+         InlineKeyboardButton("📢 Channel 2", callback_data="cfg_ch2")],
     ])
     await update.message.reply_text(msg, reply_markup=kb)
+
+
+def fj_keyboard():
+    kb = []
+    c1 = get_setting("channel_1", "")
+    c2 = get_setting("channel_2", "")
+    if c1:
+        kb.append([InlineKeyboardButton("📢 Join Channel 1", url=f"https://t.me/{c1.lstrip('@')}")])
+    if c2:
+        kb.append([InlineKeyboardButton("📢 Join Channel 2", url=f"https://t.me/{c2.lstrip('@')}")])
+    kb.append([InlineKeyboardButton("✅ I've Joined", callback_data="fj_verify")])
+    return InlineKeyboardMarkup(kb)
+
+
+async def fj_ok(ctx, uid: int) -> bool:
+    if get_setting("force_join", "OFF") != "ON":
+        return True
+    for key in ("channel_1", "channel_2"):
+        ch = get_setting(key, "").strip()
+        if not ch:
+            continue
+        try:
+            m = await ctx.bot.get_chat_member(ch if ch.startswith("@") else "@" + ch, uid)
+            if m.status in ("left", "kicked"):
+                return False
+        except Exception:
+            continue
+    return True
 
 
 async def cmd_apipanels(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -1508,6 +1556,11 @@ def order_buttons(oid: int):
 
 async def cmd_numbers(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+    if not is_admin(uid) and not await fj_ok(ctx, uid):
+        await update.message.reply_text(
+            "❌ Please join our channels first.\n\nJoin both channels below, then press I've Joined.",
+            reply_markup=fj_keyboard())
+        return
     con = db()
     rows = con.execute("SELECT * FROM orders WHERE user_id=? AND status='pending' ORDER BY id DESC LIMIT 5",
                        (uid,)).fetchall()
@@ -1839,6 +1892,16 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await q.message.reply_text("Main Menu", reply_markup=admin_menu())
         else:
             await q.message.reply_text("Main Menu", reply_markup=user_menu())
+        return
+    if data == "fj_verify":
+        if await fj_ok(ctx, uid):
+            if is_admin(uid):
+                await q.message.reply_text("✅ Verified!", reply_markup=admin_menu())
+            else:
+                await q.message.reply_text("✅ Verified!", reply_markup=user_menu())
+        else:
+            await q.message.reply_text("❌ Please join our channels first.",
+                                       reply_markup=fj_keyboard())
         return
     if data.startswith("nb_refresh:"):
         oid = int(data.split(":")[1])
