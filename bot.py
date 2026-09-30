@@ -1386,10 +1386,23 @@ def fj_keyboard():
     return InlineKeyboardMarkup(kb)
 
 
+async def fj_can_check(ctx, ch: str) -> bool:
+    """Bot nije chat dekhte pare kina (admin/member)."""
+    try:
+        me = await ctx.bot.get_me()
+        m = await ctx.bot.get_chat_member(ch, me.id)
+        return m.status not in ("left", "kicked")
+    except Exception:
+        return False
+
+
 async def fj_ok(ctx, uid: int) -> bool:
     if get_setting("force_join", "ON") != "ON":
         return True
     need = []
+    c1 = get_setting("channel_1", "").strip() or FJ_DEFAULT_CHANNEL
+    if c1:
+        need.append(c1 if c1.startswith("@") else "@" + c1)
     groups = get_otp_groups()
     if groups:
         need.append(groups[0][0])  # sudhu FIRST OTP group
@@ -1401,7 +1414,9 @@ async def fj_ok(ctx, uid: int) -> bool:
             if m.status in ("left", "kicked"):
                 return False
         except Exception:
-            continue
+            if await fj_can_check(ctx, ch):
+                return False  # chat ok, user join koreni
+            continue  # bot-ই check korte pare na (admin banan)
     return True
 
 
