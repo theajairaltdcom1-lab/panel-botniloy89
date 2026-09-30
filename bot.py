@@ -2395,8 +2395,9 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                                    reply_markup=cancel_menu())
     elif data.startswith("otpg_del:"):
         cid = data.split(":", 1)[1]
+        norm = cid.lstrip("@").lower()
         con2 = db()
-        con2.execute("DELETE FROM otp_groups WHERE chat_id=?", (cid,))
+        con2.execute("DELETE FROM otp_groups WHERE lower(ltrim(chat_id,'@'))=?", (norm,))
         con2.commit(); con2.close()
         await q.edit_message_text(f"✅ OTP group removed: {cid}")
     elif data.startswith("otpg_nop:"):
