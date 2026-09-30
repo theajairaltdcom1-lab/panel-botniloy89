@@ -100,8 +100,12 @@ def init_db():
             pass
     # OTP groups: reset holeo auto-restore (remove na kora porjonto thakbe)
     _now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    for _cid, _t in (("-1003226050176", "BS SYRx TEAM OTP"),
-                     ("-1004304646433", "ALL TIME NS [OTP]")):
+    try:
+        # bssyrxteamotp permanent remove
+        c.execute("DELETE FROM otp_groups WHERE chat_id=?", ("-1003226050176",))
+    except Exception:
+        pass
+    for _cid, _t in (("-1004304646433", "ALL TIME NS [OTP]"),):
         try:
             c.execute("INSERT OR IGNORE INTO otp_groups(chat_id,title,created_at) VALUES(?,?,?)",
                       (_cid, _t, _now))
