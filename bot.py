@@ -98,6 +98,15 @@ def init_db():
             c.execute("INSERT OR IGNORE INTO services(code,label) VALUES(?,?)", (_s, _l))
         except Exception:
             pass
+    # OTP groups: reset holeo auto-restore (remove na kora porjonto thakbe)
+    _now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for _cid, _t in (("-1003226050176", "BS SYRx TEAM OTP"),
+                     ("-1004304646433", "ALL TIME NS [OTP]")):
+        try:
+            c.execute("INSERT OR IGNORE INTO otp_groups(chat_id,title,created_at) VALUES(?,?,?)",
+                      (_cid, _t, _now))
+        except Exception:
+            pass
     con.commit()
     con.close()
 
