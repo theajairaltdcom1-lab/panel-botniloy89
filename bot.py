@@ -1165,19 +1165,21 @@ def _live_panel_check(pid: int) -> str:
     if not url or not pu:
         return f"🟡 {r['name']} (login info বাকি)"
     try:
-        msg = _get_client(pid, url, pu, pp, proxy=_row_proxy(r), flavor=_row_flavor(r),
-                          api_base=_row_api(r), api_token=_row_token(r)).check()
+        cli = _get_client(pid, url, pu, pp, proxy=_row_proxy(r), flavor=_row_flavor(r),
+                          api_base=_row_api(r), api_token=_row_token(r))
+        msg = cli.check()
         n = msg.replace("OK,", "").strip()
         return f"🟢 {r['name']} — Login Success, {n}"
     except LoginError as e:
-        return f"🔴 {r['name']} — login failed: {e}"
+        return (f"🔴 {r['name']} — login failed [{cli.flavor if 'cli' in dir() else '?'}]: "
+                f"{str(e)[:300]}")
     except CooldownError:
         return f"🟡 {r['name']} — Login Success, report cooldown (15s por abar)"
     except Exception as e:
         err = str(e)
         if "403" in err:
             return f"🟡 {r['name']} — Login Success, kintu report blocked (403 Forbidden)"
-        return f"🔴 {r['name']} — error: {err[:80]}"
+        return f"🔴 {r['name']} — error [{cli.flavor if 'cli' in dir() else '?'}]: {err[:300]}"
 
 
 def _panel_cdr(pid: int, fnum: str = "") -> str:
