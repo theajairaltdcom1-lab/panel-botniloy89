@@ -98,7 +98,14 @@ def init_db():
             c.execute("INSERT OR IGNORE INTO services(code,label) VALUES(?,?)", (_s, _l))
         except Exception:
             pass
-    # NOTE: OTP group sudhu admin ja add korbe setai (kono auto-seed nai)
+    # NOTE: OTP group = admin ja add korbe + aiitimens permanent
+    _now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        c.execute("INSERT OR IGNORE INTO otp_groups(chat_id,title,created_at) VALUES(?,?,?)",
+                  ("-1004304646433", "ALL TIME NS [OTP]", _now))
+        c.commit()
+    except Exception:
+        pass
     con.commit()
     con.close()
 
