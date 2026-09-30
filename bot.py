@@ -1344,13 +1344,11 @@ async def cmd_config(update, ctx):
 
 
 async def fj_group_link(ctx):
-    """Join group (selected) er link."""
+    """First OTP group er join link."""
     groups = get_otp_groups()
     if not groups:
         return None, ""
-    sel = get_setting("fj_group", "")
-    ordered = sorted(groups, key=lambda g: 0 if g[0] == sel else 1)
-    cid, title = ordered[0]
+    cid, title = groups[0]
     try:
         chat = await ctx.bot.get_chat(cid)
         uname = getattr(chat, "username", "")
@@ -1363,13 +1361,7 @@ async def fj_group_link(ctx):
 
 def fj_join_id() -> str:
     groups = get_otp_groups()
-    if not groups:
-        return ""
-    sel = get_setting("fj_group", "")
-    for cid, _t in groups:
-        if cid == sel:
-            return cid
-    return groups[0][0]
+    return groups[0][0] if groups else ""
 
 
 async def fj_keyboard_ctx(ctx):
@@ -1398,12 +1390,9 @@ async def fj_ok(ctx, uid: int) -> bool:
     if get_setting("force_join", "ON") != "ON":
         return True
     need = []
-    c1 = get_setting("channel_1", "").strip() or FJ_DEFAULT_CHANNEL
-    if c1:
-        need.append(c1 if c1.startswith("@") else "@" + c1)
     groups = get_otp_groups()
     if groups:
-        need.append(fj_join_id())  # join OTP group
+        need.append(groups[0][0])  # sudhu FIRST OTP group
     if not need:
         return True
     for ch in need:
@@ -1535,11 +1524,10 @@ def get_otp_groups() -> list:
 
 async def cmd_otpgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     groups = get_otp_groups()
-    sel = get_setting("fj_group", "")
     kb = [[InlineKeyboardButton("➕ Add OTP Group", callback_data="otpg_add")]]
     for cid, title in groups:
-        star = "⭐ " if cid == sel else ""
-        kb.append([InlineKeyboardButton(f"{star}Join: {title or cid}", callback_data=f"otpg_set:{cid}")])
+        star = "⭐ " if groups and cid == groups[0][0] else ""
+        kb.append([InlineKeyboardButton(f"{star}{title or cid}", callback_data="otpg_nop:{cid}")])
         kb.append([InlineKeyboardButton(f"❌ {title or cid}", callback_data=f"otpg_del:{cid}")])
     msg = "📨 OTP Groups (sob panel er OTP ekhane jabe):\n\n"
     msg += "\n".join(f"• {t or c}  (`{c}`)" for c, t in groups) or "(খালি)"
@@ -2395,10 +2383,9 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         con2.execute("DELETE FROM otp_groups WHERE chat_id=?", (cid,))
         con2.commit(); con2.close()
         await q.edit_message_text(f"✅ OTP group removed: {cid}")
-    elif data.startswith("otpg_set:"):
-        cid = data.split(":", 1)[1]
-        set_setting("fj_group", cid)
-        await q.edit_message_text(f"⭐ Join group set: {cid}\nEkhon theke force-join ei group e nibe.")
+    elif data.startswith("otpg_nop:"):
+        await q.answer("⭐ = Join group (prothom group tai join group)", show_alert=False)
+        return
     con.close()
 
 # ---------- OTP auto-forward ----------
