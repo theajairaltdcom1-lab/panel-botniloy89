@@ -763,27 +763,46 @@ async def handle_state(update: Update, ctx: ContextTypes.DEFAULT_TYPE, text: str
             reply_markup=cancel_menu())
 
     elif st == "stock_add_nums":
-        import re as _re2
         svc = ctx.user_data.get("svc", "telegram")
-        nums = []
-        for line in text.split("\n"):
-            for tok in _re2.split(r"[\s,;]+", line.strip()):
-                d = _re2.sub(r"\D", "", tok)
-                if len(d) >= 7:
-                    nums.append("+" + d)
-        con = db()
-        added = 0
-        for n in dict.fromkeys(nums):
-            try:
-                con.execute("INSERT OR IGNORE INTO stock(service,number,country,created_at) VALUES(?,?,?,?)",
-                            (svc, n, country_of_number(n), now()))
-                added += 1
-            except Exception:
-                pass
-        con.commit(); con.close()
+        await update.message.reply_text("⏳ Import হচ্ছে...", reply_markup=cancel_menu())
+        added = await import_numbers_text(svc, text)
         ctx.user_data.clear()
         await update.message.reply_text(f"✅ Stock added: {added} ({svc_label(svc)})",
                                         reply_markup=admin_menu())
+        if added:
+            sent = await notify_stock(svc, added, ctx)
+            await update.message.reply_text(f"📣 Notified {sent} users.", reply_markup=admin_menu())
+
+    elif st == "stock_file_svc":
+        t = text.strip().lower()
+        alias = {"tg": "telegram", "wa": "whatsapp", "fb": "facebook", "ig": "instagram"}
+        svc = alias.get(t, t)
+        if svc not in [s for s, _ in get_services()]:
+            await update.message.reply_text("❌ Service name দিন: telegram / whatsapp / facebook / instagram")
+            return
+        path = ctx.user_data.pop("stock_file", "")
+        ctx.user_data.clear()
+        await update.message.reply_text("⏳ File import হচ্ছে...", reply_markup=cancel_menu())
+        try:
+            content = await asyncio.to_thread(extract_numbers_from_file, path)
+            added = await import_numbers_text(svc, content)
+        except RuntimeError as e:
+            await update.message.reply_text(f"❌ {e}", reply_markup=admin_menu())
+            return
+        except Exception as e:
+            await update.message.reply_text(f"❌ File error: {str(e)[:120]}", reply_markup=admin_menu())
+            return
+        finally:
+            try:
+                import os as _os9
+                _os9.remove(path)
+            except Exception:
+                pass
+        await update.message.reply_text(f"✅ Stock added: {added} ({svc_label(svc)})",
+                                        reply_markup=admin_menu())
+        if added:
+            sent = await notify_stock(svc, added, ctx)
+            await update.message.reply_text(f"📣 Notified {sent} users.", reply_markup=admin_menu())
 
     elif st == "wd_amt":
         import config as _cfg3
@@ -1493,10 +1512,99 @@ def svc_label(svc: str) -> str:
 def country_of_number(number: str) -> str:
     from country import COUNTRIES
     d = "".join(ch for ch in (number or "") if ch.isdigit())
+    if d.startswith("00"):
+        d = d[2:]
+    d = d.lstrip("0") if len(d) > 10 else d
     for length in (4, 3, 2, 1):
         if COUNTRIES.get(d[:length]):
             return COUNTRIES[d[:length]][0]
     return ""
+
+
+def normalize_number(tok: str) -> str:
+    import re as _re9
+    t = (tok or "").strip()
+    if t.startswith("00"):
+        t = "+" + t[2:]
+    d = _re9.sub(r"\D", "", t)
+    if len(d) < 7:
+        return ""
+    return "+" + d
+
+
+async def import_numbers_text(svc: str, text: str) -> int:
+    import re as _re2
+    nums = []
+    for line in (text or "").split("\n"):
+        for tok in _re2.split(r"[\s,;]+", line.strip()):
+            n = normalize_number(tok)
+            if n:
+                nums.append(n)
+    con = db()
+    added = 0
+    for n in dict.fromkeys(nums):
+        try:
+            con.execute("INSERT OR IGNORE INTO stock(service,number,country,created_at) VALUES(?,?,?,?)",
+                        (svc, n, country_of_number(n), now()))
+            added += 1
+        except Exception:
+            pass
+    con.commit(); con.close()
+    return added
+
+
+async def notify_stock(svc: str, added: int, ctx) -> int:
+    con = db()
+    users = con.execute("SELECT user_id FROM users WHERE banned=0").fetchall()
+    con.close()
+    sent = 0
+    for r in users:
+        try:
+            await ctx.bot.send_message(
+                r["user_id"],
+                f"🎉 NEW STOCK!\n\n{svc_label(svc)}\n📦 {added} numbers added ✅\n\n📱 Numbers button e jan!",
+                reply_markup=user_menu() if not is_admin(r["user_id"]) else admin_menu())
+            sent += 1
+        except Exception:
+            pass
+    return sent
+
+
+def extract_numbers_from_file(path: str) -> str:
+    low = path.lower()
+    if low.endswith(".txt") or low.endswith(".csv"):
+        with open(path, encoding="utf-8", errors="ignore") as f:
+            return f.read()
+    if low.endswith(".xlsx"):
+        try:
+            import openpyxl as _ox
+            wb = _ox.load_workbook(path, read_only=True, data_only=True)
+            out = []
+            for ws in wb.worksheets:
+                for row in ws.iter_rows(values_only=True):
+                    out.append(" ".join(str(c) for c in row if c is not None))
+            return "\n".join(out)
+        except ImportError:
+            raise RuntimeError("xlsx support er jonno openpyxl lagbe")
+    if low.endswith(".xls"):
+        try:
+            import xlrd as _xl
+            wb = _xl.open_workbook(path)
+            out = []
+            for sh in wb.sheets():
+                for rx in range(sh.nrows):
+                    out.append(" ".join(str(c) for c in sh.row_values(rx)))
+            return "\n".join(out)
+        except ImportError:
+            raise RuntimeError("xls support er jonno xlrd lagbe")
+    if low.endswith(".pdf"):
+        try:
+            import pypdf as _pp
+            rd = _pp.PdfReader(path)
+            return "\n".join((p.extract_text() or "") for p in rd.pages)
+        except ImportError:
+            raise RuntimeError("pdf support er jonno pypdf lagbe")
+    raise RuntimeError("Support: .txt .csv .xlsx .xls .pdf")
 
 
 def stock_count(svc: str) -> int:
@@ -2397,6 +2505,64 @@ async def _post_init(app):
 
 
 # ---------- main ----------
+async def on_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    u = update.effective_user
+    if not is_admin(u.id):
+        return
+    doc = update.message.document
+    if not doc:
+        return
+    if (doc.file_size or 0) > 10 * 1024 * 1024:
+        await update.message.reply_text("❌ File max 10MB.")
+        return
+    cap = (update.message.caption or "").strip().lower()
+    alias = {"tg": "telegram", "wa": "whatsapp", "fb": "facebook", "ig": "instagram"}
+    svc = ""
+    for k, v in alias.items():
+        if k in cap or v in cap:
+            svc = v
+            break
+    if not svc:
+        for s, _ in get_services():
+            if s in cap:
+                svc = s
+                break
+    try:
+        tg_file = await ctx.bot.get_file(doc.file_id)
+        import os as _os8, time as _t8
+        path = f"stock_{u.id}_{int(_t8.time())}_{doc.file_name or 'up.txt'}"
+        await tg_file.download_to_drive(path)
+    except Exception as e:
+        await update.message.reply_text(f"❌ Download fail: {str(e)[:120]}")
+        return
+    if svc:
+        await update.message.reply_text("⏳ File import হচ্ছে...", reply_markup=cancel_menu())
+        try:
+            content = await asyncio.to_thread(extract_numbers_from_file, path)
+            added = await import_numbers_text(svc, content)
+        except RuntimeError as e:
+            await update.message.reply_text(f"❌ {e}", reply_markup=admin_menu())
+            return
+        except Exception as e:
+            await update.message.reply_text(f"❌ File error: {str(e)[:120]}", reply_markup=admin_menu())
+            return
+        finally:
+            try:
+                _os8.remove(path)
+            except Exception:
+                pass
+        await update.message.reply_text(f"✅ Stock added: {added} ({svc_label(svc)})",
+                                        reply_markup=admin_menu())
+        if added:
+            sent = await notify_stock(svc, added, ctx)
+            await update.message.reply_text(f"📣 Notified {sent} users.", reply_markup=admin_menu())
+    else:
+        ctx.user_data["stock_file"] = path
+        ctx.user_data["state"] = "stock_file_svc"
+        await update.message.reply_text("Service name পাঠান: telegram / whatsapp / facebook / instagram",
+                                        reply_markup=cancel_menu())
+
+
 def main():
     if not BOT_TOKEN or BOT_TOKEN.startswith("PUT_"):
         print("❌ BOT_TOKEN set korun (ENV BOT_TOKEN ba local_settings.py)।")
@@ -2405,6 +2571,7 @@ def main():
     app = ApplicationBuilder().token(BOT_TOKEN).post_init(_post_init).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin_cmd))
+    app.add_handler(MessageHandler(filters.Document.ALL & ~filters.COMMAND, on_document))
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     print("Bot running...")
