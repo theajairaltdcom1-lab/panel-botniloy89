@@ -1362,7 +1362,7 @@ async def fj_group_link(ctx):
 async def fj_keyboard_ctx(ctx):
     kb = []
     c1 = get_setting("channel_1", "") or FJ_DEFAULT_CHANNEL
-    kb.append([InlineKeyboardButton("📢 Join Channel 1", url=f"https://t.me/{c1.lstrip('@')}")])
+    kb.append([InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{c1.lstrip('@')}")])
     glink, gtitle = await fj_group_link(ctx)
     if glink:
         kb.append([InlineKeyboardButton("📢 Join OTP Group", url=glink)])
@@ -1375,7 +1375,7 @@ async def fj_keyboard_ctx(ctx):
 def fj_keyboard():
     kb = []
     c1 = get_setting("channel_1", "") or FJ_DEFAULT_CHANNEL
-    kb.append([InlineKeyboardButton("📢 Join Channel 1", url=f"https://t.me/{c1.lstrip('@')}")])
+    kb.append([InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{c1.lstrip('@')}")])
     kb.append([InlineKeyboardButton("📢 Join OTP Group", callback_data="fj_noinvite")])
     kb.append([InlineKeyboardButton("✅ I've Joined", callback_data="fj_verify")])
     return InlineKeyboardMarkup(kb)
