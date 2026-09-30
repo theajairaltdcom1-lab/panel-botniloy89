@@ -235,6 +235,7 @@ def admin_menu():
         ["📨 OTP Groups"],
         ["🔌 API Panels"],
         ["📱 Number Stock", "💸 Withdrawals"],
+        ["⚙️ Admin Panel"],
         ["💰 Balance Manage", "👁️ User Balance History"],
         ["📱 User Panel"],
         ["➕ Add Master Admin", "❌ Remove Master Admin"],
@@ -424,6 +425,8 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await cmd_otpgroups(update, ctx)
     elif "API Panels" in text:
         await cmd_apipanels(update, ctx)
+    elif "Admin Panel" in text:
+        await cmd_adminpanel(update, ctx)
     elif text == "📱 User Panel":
         await update.message.reply_text("👤 User Panel (admin view):", reply_markup=user_menu())
     elif text.startswith("➕ Add Master"):
@@ -1330,6 +1333,24 @@ async def cmd_apipanels(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"🔌 {r['name']}\n🌐 {api or '-'}", reply_markup=kb)
 
 
+async def cmd_adminpanel(update: Update, ctx: ContextTypes.DEFAULT_TYPE, edit_msg=None):
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 Statistics", callback_data="ap_stats")],
+        [InlineKeyboardButton("👥 Users", callback_data="ap_users")],
+        [InlineKeyboardButton("📱 Stock", callback_data="ap_stock")],
+        [InlineKeyboardButton("➕ Add Numbers", callback_data="ap_addnum")],
+        [InlineKeyboardButton("➖ Remove Numbers", callback_data="ap_rmnum")],
+        [InlineKeyboardButton("📢 Broadcast", callback_data="ap_broadcast")],
+        [InlineKeyboardButton("[BS ADMIN]", callback_data="ap_bsadmin")],
+        [InlineKeyboardButton("💾 Backup", callback_data="ap_backup")],
+        [InlineKeyboardButton("⬅️ Back", callback_data="ap_back")],
+    ])
+    if edit_msg is not None:
+        await edit_msg.edit_text("👑 Admin Panel", reply_markup=kb)
+    else:
+        await update.message.reply_text("👑 Admin Panel", reply_markup=kb)
+
+
 async def cmd_checker_status(update, ctx):
     con = db()
     pend_o = con.execute("SELECT COUNT(*) c FROM orders WHERE status='pending'").fetchone()["c"]
@@ -2077,6 +2098,63 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return
         ctx.user_data["state"] = "master_remove"
         await q.message.reply_text("Remove করতে ID বা @username পাঠান:", reply_markup=cancel_menu())
+    elif data and data.startswith("ap_"):
+        if not is_admin(uid):
+            return
+        if data == "ap_stats":
+            con3 = db()
+            u = con3.execute("SELECT COUNT(*) c FROM users").fetchone()["c"]
+            p = con3.execute("SELECT COUNT(*) c FROM panels").fetchone()["c"]
+            n = con3.execute("SELECT COUNT(*) c FROM stock").fetchone()["c"]
+            o = con3.execute("SELECT COUNT(*) c FROM orders").fetchone()["c"]
+            con3.close()
+            await q.message.reply_text(f"📊 Statistics\n\n👥 Users: {u}\n📋 Panels: {p}\n📱 Stock: {n}\n📦 Orders: {o}")
+        elif data == "ap_users":
+            con3 = db()
+            rows = con3.execute("SELECT user_id, username, balance FROM users ORDER BY rowid DESC LIMIT 20").fetchall()
+            con3.close()
+            msg = "👥 Users:\n" + ("\n".join(f"`{r['user_id']}` @{r['username'] or '-'} | {r['balance']}" for r in rows) if rows else "-")
+            await q.message.reply_text(msg, parse_mode="Markdown")
+        elif data == "ap_stock":
+            lines = [f"• {label}: {stock_count(svc)}" for svc, label in get_services()]
+            await q.message.reply_text("📱 Stock:\n\n" + "\n".join(lines))
+        elif data == "ap_addnum":
+            ctx.user_data["state"] = "stock_add_svc"
+            await q.message.reply_text("Service name পাঠান: telegram / whatsapp / facebook / instagram",
+                                       reply_markup=cancel_menu())
+        elif data == "ap_rmnum":
+            kb = [[InlineKeyboardButton(label, callback_data=f"stock_rm_svc:{svc}")]
+                  for svc, label in get_services()]
+            await q.message.reply_text("Remove — service select:",
+                                       reply_markup=InlineKeyboardMarkup(kb))
+        elif data == "ap_broadcast":
+            ctx.user_data["state"] = "broadcast"
+            await q.message.reply_text("Broadcast message পাঠান:", reply_markup=cancel_menu())
+        elif data == "ap_bsadmin":
+            if not is_main_admin(uid):
+                await q.message.reply_text("❌ Only main admin.")
+                return
+            con3 = db()
+            try:
+                rows = con3.execute("SELECT user_id FROM master_admins").fetchall()
+            except Exception:
+                rows = []
+            con3.close()
+            await q.message.reply_text("[BS ADMIN]\n\nMaster Admins:\n" +
+                                       ("\n".join(f"`{r['user_id']}`" for r in rows) if rows else "(খালি)"),
+                                       parse_mode="Markdown")
+        elif data == "ap_backup":
+            if not is_main_admin(uid):
+                await q.message.reply_text("❌ Only main admin.")
+                return
+            try:
+                with open(DB, "rb") as f:
+                    await q.message.reply_document(document=f, filename="bot_backup.db",
+                                                   caption="💾 Backup")
+            except Exception as e:
+                await q.message.reply_text(f"❌ Backup fail: {str(e)[:100]}")
+        elif data == "ap_back":
+            await q.message.reply_text("📞 Main Menu", reply_markup=admin_menu())
     elif data == "otpg_add":
         ctx.user_data["state"] = "otpgroup_add"
         await q.message.reply_text("OTP group er @username বা ID পাঠান (bot group e admin থাকতে হবে):",
