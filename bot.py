@@ -213,7 +213,7 @@ def add_balance(uid: int, amount: float, reason: str, admin_id: int):
 
 # ---------- keyboards (screenshot layout) ----------
 def admin_menu():
-    npr = get_setting("numbers_per_request", "1")
+    npr = get_setting("numbers_per_request", "3")
     cm = get_setting("checker_mode", "ON")
     pd = get_setting("prefix_display", "ON")
     pl = get_setting("prefix_length", "7")
@@ -1779,7 +1779,7 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await q.message.reply_text("❌ আপনার active number আছে। age oita ses করুন।")
             return
         try:
-            want = max(1, min(20, int(get_setting("numbers_per_request", "1"))))
+            want = max(1, min(20, int(get_setting("numbers_per_request", "3"))))
         except ValueError:
             want = 1
         got = []
@@ -1859,7 +1859,7 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return
         restock_number(o["service"], o["number"])
         try:
-            want = max(1, min(20, int(get_setting("numbers_per_request", "1"))))
+            want = max(1, min(20, int(get_setting("numbers_per_request", "3"))))
         except ValueError:
             want = 1
         got = []
