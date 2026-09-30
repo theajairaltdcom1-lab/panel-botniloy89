@@ -1,0 +1,13 @@
+services:
+  - type: worker
+    name: panel-bot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -u bot.py
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_IDS
+        value: "8052490293"
+      - key: POLL_SECONDS
+        value: "20"

@@ -1,0 +1,16 @@
+bot.db
+bot.db-journal
+bot.db-wal
+bot.db-shm
+__pycache__/
+*.pyc
+local_settings.py
+*.log
+*.png
+*.html
+*.js
+*.txt
+!requirements.txt
+!README.md
+ms-playwright/
+pw-browsers/
