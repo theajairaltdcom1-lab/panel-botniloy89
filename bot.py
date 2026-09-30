@@ -98,20 +98,7 @@ def init_db():
             c.execute("INSERT OR IGNORE INTO services(code,label) VALUES(?,?)", (_s, _l))
         except Exception:
             pass
-    # OTP groups: reset holeo auto-restore (remove na kora porjonto thakbe)
-    _now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    try:
-        # bssyrxteamotp permanent remove (id + username sob format)
-        c.execute("DELETE FROM otp_groups WHERE chat_id IN (?,?,?)",
-                  ("-1003226050176", "@bssyrxteamotp", "bssyrxteamotp"))
-    except Exception:
-        pass
-    for _cid, _t in (("-1004304646433", "ALL TIME NS [OTP]"),):
-        try:
-            c.execute("INSERT OR IGNORE INTO otp_groups(chat_id,title,created_at) VALUES(?,?,?)",
-                      (_cid, _t, _now))
-        except Exception:
-            pass
+    # NOTE: OTP group sudhu admin ja add korbe setai (kono auto-seed nai)
     con.commit()
     con.close()
 
