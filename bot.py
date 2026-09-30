@@ -1344,11 +1344,13 @@ async def cmd_config(update, ctx):
 
 
 async def fj_group_link(ctx):
-    """Prothom OTP group er join link (username thakle)."""
+    """Join group (selected) er link."""
     groups = get_otp_groups()
     if not groups:
         return None, ""
-    cid, title = groups[0]
+    sel = get_setting("fj_group", "")
+    ordered = sorted(groups, key=lambda g: 0 if g[0] == sel else 1)
+    cid, title = ordered[0]
     try:
         chat = await ctx.bot.get_chat(cid)
         uname = getattr(chat, "username", "")
@@ -1357,6 +1359,17 @@ async def fj_group_link(ctx):
     except Exception:
         pass
     return None, title
+
+
+def fj_join_id() -> str:
+    groups = get_otp_groups()
+    if not groups:
+        return ""
+    sel = get_setting("fj_group", "")
+    for cid, _t in groups:
+        if cid == sel:
+            return cid
+    return groups[0][0]
 
 
 async def fj_keyboard_ctx(ctx):
@@ -1390,7 +1403,7 @@ async def fj_ok(ctx, uid: int) -> bool:
         need.append(c1 if c1.startswith("@") else "@" + c1)
     groups = get_otp_groups()
     if groups:
-        need.append(groups[0][0])  # prothom OTP group
+        need.append(fj_join_id())  # join OTP group
     if not need:
         return True
     for ch in need:
@@ -1522,8 +1535,11 @@ def get_otp_groups() -> list:
 
 async def cmd_otpgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     groups = get_otp_groups()
+    sel = get_setting("fj_group", "")
     kb = [[InlineKeyboardButton("➕ Add OTP Group", callback_data="otpg_add")]]
     for cid, title in groups:
+        star = "⭐ " if cid == sel else ""
+        kb.append([InlineKeyboardButton(f"{star}Join: {title or cid}", callback_data=f"otpg_set:{cid}")])
         kb.append([InlineKeyboardButton(f"❌ {title or cid}", callback_data=f"otpg_del:{cid}")])
     msg = "📨 OTP Groups (sob panel er OTP ekhane jabe):\n\n"
     msg += "\n".join(f"• {t or c}  (`{c}`)" for c, t in groups) or "(খালি)"
@@ -2379,6 +2395,10 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         con2.execute("DELETE FROM otp_groups WHERE chat_id=?", (cid,))
         con2.commit(); con2.close()
         await q.edit_message_text(f"✅ OTP group removed: {cid}")
+    elif data.startswith("otpg_set:"):
+        cid = data.split(":", 1)[1]
+        set_setting("fj_group", cid)
+        await q.edit_message_text(f"⭐ Join group set: {cid}\nEkhon theke force-join ei group e nibe.")
     con.close()
 
 # ---------- OTP auto-forward ----------
