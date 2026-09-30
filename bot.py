@@ -1640,6 +1640,16 @@ def tm_read(login: str, domain: str, mid: int):
     return d.get("subject", ""), d.get("from", ""), " ".join(body.split())[:1500]
 
 
+def tm_keyboard(login: str, domain: str):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📋 Copy Email",
+                             copy_text=CopyTextButton(f"{login}@{domain}")),
+         InlineKeyboardButton("📧 New Email", callback_data="tm_new")],
+        [InlineKeyboardButton("🔄 Refresh OTP", callback_data="tm_inbox")],
+        [InlineKeyboardButton("⬅️ Back", callback_data="tm_back")],
+    ])
+
+
 async def cmd_tempmail(update: Update, ctx: ContextTypes.DEFAULT_TYPE, login="", domain=""):
     uid = update.effective_user.id
     if not login:
@@ -1655,12 +1665,9 @@ async def cmd_tempmail(update: Update, ctx: ContextTypes.DEFAULT_TYPE, login="",
             except Exception as e:
                 await update.message.reply_text(f"❌ TempMail error: {str(e)[:100]}")
                 return
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📥 Inbox", callback_data="tm_inbox"),
-         InlineKeyboardButton("🆕 New Email", callback_data="tm_new")],
-    ])
-    await update.message.reply_text(f"📧 Temp Mail\n\n`{login}@{domain}`",
-                                    parse_mode="Markdown", reply_markup=kb)
+    await update.message.reply_text(
+        f"📧 Temp Mail\n\nEmail: `{login}@{domain}`\nWaiting for Verification",
+        parse_mode="Markdown", reply_markup=tm_keyboard(login, domain))
 
 
 async def cmd_traffic(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -1911,11 +1918,15 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             await q.message.reply_text(f"❌ TempMail error: {str(e)[:100]}")
             return
-        kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📥 Inbox", callback_data="tm_inbox"),
-             InlineKeyboardButton("🆕 New Email", callback_data="tm_new")]])
-        await q.message.reply_text(f"📧 Temp Mail\n\n`{login}@{domain}`",
-                                   parse_mode="Markdown", reply_markup=kb)
+        await q.message.reply_text(
+            f"📧 Temp Mail\n\nEmail: `{login}@{domain}`\nWaiting for Verification",
+            parse_mode="Markdown", reply_markup=tm_keyboard(login, domain))
+        return
+    if data == "tm_back":
+        if is_admin(uid):
+            await q.message.reply_text("Main Menu", reply_markup=admin_menu())
+        else:
+            await q.message.reply_text("Main Menu", reply_markup=user_menu())
         return
     if data == "tm_inbox":
         con0 = db()
