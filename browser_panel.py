@@ -61,7 +61,14 @@ def _ensure():
             try:
                 _browser = _pw.chromium.launch(channel="chrome", headless=True)
             except Exception:
-                _browser = _pw.chromium.launch(headless=True)
+                try:
+                    _browser = _pw.chromium.launch(headless=True)
+                except Exception:
+                    import subprocess as _sp
+                    import sys as _sys
+                    _sp.run([_sys.executable, "-m", "playwright", "install",
+                             "chromium"], timeout=600)
+                    _browser = _pw.chromium.launch(headless=True)
         except Exception:
             _browser = None
             raise
