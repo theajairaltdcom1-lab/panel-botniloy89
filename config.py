@@ -19,7 +19,7 @@ except ImportError:
 # OTP forward group (bot ke group e add kore admin dite hobe)
 OTP_GROUP = _os.environ.get("OTP_GROUP", "@bssyrxteamotp")
 # Koto second por por panel check hobe
-POLL_SECONDS = int(_os.environ.get("POLL_SECONDS", "20"))
+POLL_SECONDS = int(_os.environ.get("POLL_SECONDS", "10"))
 # Referral reward + withdraw limits
 REF_REWARD = float(_os.environ.get("REF_REWARD", "5"))
 MIN_WITHDRAW = float(_os.environ.get("MIN_WITHDRAW", "10"))
