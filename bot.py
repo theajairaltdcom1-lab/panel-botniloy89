@@ -529,7 +529,13 @@ async def handle_state(update: Update, ctx: ContextTypes.DEFAULT_TYPE, text: str
     elif st == "add_panel_url":
         ctx.user_data["purl"] = text
         ctx.user_data["state"] = "add_panel_user"
-        await update.message.reply_text("Panel এর User / Username পাঠান:", reply_markup=cancel_menu())
+        await update.message.reply_text("🔍 Version check হচ্ছে...", reply_markup=cancel_menu())
+        try:
+            ver = await asyncio.to_thread(_detect_panel_type, text.strip())
+        except Exception as e:
+            ver = f"❓ Check fail: {str(e)[:100]}"
+        await update.message.reply_text(f"{ver}\n\nPanel এর User / Username পাঠান:",
+                                        reply_markup=cancel_menu())
     elif st == "add_panel_user":
         ctx.user_data["puser"] = text
         ctx.user_data["state"] = "add_panel_pass"
@@ -1071,6 +1077,36 @@ async def show_panel_choice(update, prompt):
     names = ", ".join(r["name"] for r in rows) if rows else "(কোনো panel নেই)"
     await update.message.reply_text(f"{prompt}\nPanels: {names}", reply_markup=cancel_menu())
 
+def _detect_panel_type(url: str) -> str:
+    """Add-flow: URL theke version guess."""
+    from panelsms import detect_flavor, detect_v3_api, detect_v6_api, base_from_url
+    try:
+        import requests as _rq
+        r = _rq.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        html = r.text
+    except Exception as e:
+        return f"❓ URL khulche na: {str(e)[:100]}"
+    fl = detect_flavor(html)
+    if fl == "v1":
+        return "✅ v1 (ServisSMS)"
+    if fl == "v2":
+        return "✅ v2 (tempsms.io)"
+    base = base_from_url(url)
+    try:
+        v3 = detect_v3_api(base, timeout=12)
+    except Exception:
+        v3 = ""
+    if v3:
+        return f"✅ v3 (React API)"
+    try:
+        v6 = detect_v6_api(base, timeout=12)
+    except Exception:
+        v6 = ""
+    if v6:
+        return "✅ v6 (teleroutex API)"
+    return "🌐 v4 (browser) / unknown — add kore test hobe"
+
+
 async def cmd_panel_list(update, ctx):
     con = db()
     rows = con.execute("SELECT * FROM panels ORDER BY id DESC").fetchall()
@@ -1097,6 +1133,17 @@ async def cmd_panel_list(update, ctx):
             except Exception: fl = "?"
             lines.append(f"• {r['name']} [{r['status']}] ({fl})\n  🔗 {url or '-'}")
     text = "📋 Panel List (unlimited):\n\n" + "\n\n".join(lines)
+    try:
+        from collections import Counter as _Counter
+        _cnt = _Counter()
+        for r in rows:
+            try:
+                _cnt[r["flavor"] or "auto"] += 1
+            except Exception:
+                _cnt["?"] += 1
+        text += "\n\n" + " | ".join(f"{k}:{v}" for k, v in sorted(_cnt.items()))
+    except Exception:
+        pass
     kb = []
     for r in rows:
         try:
