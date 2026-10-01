@@ -2668,6 +2668,11 @@ async def otp_poller(app):
 
 async def _post_init(app):
     app.create_task(otp_poller(app))
+    try:
+        from db_sync import dbsync_loop
+        app.create_task(dbsync_loop())
+    except Exception:
+        pass
 
 
 # ---------- main ----------
@@ -2733,6 +2738,12 @@ def main():
     if not BOT_TOKEN or BOT_TOKEN.startswith("PUT_"):
         print("❌ BOT_TOKEN set korun (ENV BOT_TOKEN ba local_settings.py)।")
         return
+    try:
+        from db_sync import pull_db
+        if pull_db():
+            print("DB restored from backup.")
+    except Exception as e:
+        print("DB restore skip:", str(e)[:100])
     init_db()
     app = ApplicationBuilder().token(BOT_TOKEN).post_init(_post_init).build()
     app.add_handler(CommandHandler("start", start))

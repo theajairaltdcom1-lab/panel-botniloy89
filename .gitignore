@@ -2,6 +2,7 @@ bot.db
 bot.db-journal
 bot.db-wal
 bot.db-shm
+DBBackup/
 __pycache__/
 *.pyc
 local_settings.py

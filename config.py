@@ -16,6 +16,11 @@ try:
 except ImportError:
     pass
 
+# DB backup (GitHub) — Railway reset eo data thakbe
+GH_PAT = _os.environ.get("GH_PAT", "")
+GH_REPO = _os.environ.get("GH_REPO", "theajairaltdcom1-lab/panel-botniloy89")
+GH_BRANCH = _os.environ.get("GH_BRANCH", "master")
+
 # OTP forward group (bot ke group e add kore admin dite hobe)
 OTP_GROUP = _os.environ.get("OTP_GROUP", "@bssyrxteamotp")
 # Koto second por por panel check hobe
