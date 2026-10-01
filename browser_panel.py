@@ -94,7 +94,11 @@ async def _do_login(base_url: str, username: str, password: str) -> bool:
     key = f"{base_url}|{username}"
     pg = await _get_page(key)
     await _goto(pg, base_url.rstrip("/") + "/login")
-    await pg.wait_for_timeout(3000)
+    try:
+        await pg.wait_for_selector(
+            'input[type="password"]', timeout=12000)
+    except Exception:
+        pass
     if "/login" not in (pg.url or ""):
         return True
     users = await pg.query_selector_all(
@@ -110,7 +114,11 @@ async def _do_login(base_url: str, username: str, password: str) -> bool:
         await pg.click('button[type="submit"]', timeout=5000)
     except Exception:
         await pg.keyboard.press("Enter")
-    await pg.wait_for_timeout(7000)
+    try:
+        await pg.wait_for_function(
+            "() => !window.location.pathname.includes('/login')", timeout=15000)
+    except Exception:
+        pass
     if "/login" in (pg.url or ""):
         raise RuntimeError("login rejected (ভুল user/pass)")
     return True
