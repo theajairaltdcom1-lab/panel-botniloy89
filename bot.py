@@ -2585,8 +2585,10 @@ def _poll_panels_once(seen: set) -> list:
             except ValueError:
                 plen = 7
             prefix = full[:plen] if len(full) >= plen else full
-            out.append(build_forward_text(flag, iso, app_name, service_emoji(cli),
-                                          masked, otp, prefix))
+            out.append((build_forward_text(flag, iso, app_name, service_emoji(cli),
+                                          masked, otp, prefix),
+                        {"number": "+" + full if full else "",
+                         "otp": otp or "", "prefix": prefix or ""}))
             if get_setting("checker_mode", "ON") != "ON":
                 continue
             # pending number-order match -> DM user
@@ -2625,10 +2627,30 @@ async def otp_poller(app):
                 first = False  # purano record forward হবে না, শুধু নতুন
                 news = []
             groups = get_otp_groups()
-            for txt in news[:20]:
+            for item in news[:20]:
+                if isinstance(item, tuple):
+                    txt, cp = item
+                else:
+                    txt, cp = item, {}
+                kb = None
+                try:
+                    _cbtns = []
+                    if cp.get("number"):
+                        _cbtns.append(InlineKeyboardButton(
+                            "📋 Number", copy_text=CopyTextButton(cp["number"])))
+                    if cp.get("otp"):
+                        _cbtns.append(InlineKeyboardButton(
+                            "🔑 OTP", copy_text=CopyTextButton(cp["otp"])))
+                    if cp.get("prefix"):
+                        _cbtns.append(InlineKeyboardButton(
+                            "📡 Prefix", copy_text=CopyTextButton(cp["prefix"])))
+                    if _cbtns:
+                        kb = InlineKeyboardMarkup([_cbtns])
+                except Exception:
+                    kb = None
                 for cid, _title in groups:
                     try:
-                        await app.bot.send_message(cid, txt)
+                        await app.bot.send_message(cid, txt, reply_markup=kb)
                     except Exception as e:
                         print("Forward failed:", cid, e, flush=True)
             while _pending_dms:
