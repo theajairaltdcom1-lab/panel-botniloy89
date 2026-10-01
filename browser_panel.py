@@ -58,7 +58,10 @@ def _ensure():
         try:
             from playwright.sync_api import sync_playwright
             _pw = sync_playwright().start()
-            _browser = _pw.chromium.launch(channel="chrome", headless=True)
+            try:
+                _browser = _pw.chromium.launch(channel="chrome", headless=True)
+            except Exception:
+                _browser = _pw.chromium.launch(headless=True)
         except Exception:
             _browser = None
             raise

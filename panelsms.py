@@ -124,11 +124,16 @@ def find_working_proxy(test_url: str, timeout: int = 12) -> str:
 
 
 def base_from_url(url: str) -> str:
-    u = (url or "").strip().rstrip("/")
+    from urllib.parse import urlparse
+    try:
+        p = urlparse((url or "").strip())
+        base = f"{p.scheme}://{p.netloc}{p.path}".rstrip("/")
+    except Exception:
+        base = (url or "").strip().rstrip("/")
     for tail in ("/login", "/signin"):
-        if u.lower().endswith(tail):
-            u = u[: -len(tail)]
-    return u.rstrip("/") or u
+        if base.lower().endswith(tail):
+            base = base[: -len(tail)]
+    return base.rstrip("/") or base
 
 
 class PanelClient:
