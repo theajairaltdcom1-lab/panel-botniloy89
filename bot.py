@@ -2643,7 +2643,13 @@ async def otp_poller(app):
                         _cbtns.append(InlineKeyboardButton(
                             "📡 Prefix", copy_text=CopyTextButton(cp["prefix"])))
                     if _cbtns:
-                        kb = InlineKeyboardMarkup([_cbtns])
+                        kb = InlineKeyboardMarkup([
+                            _cbtns,
+                            [InlineKeyboardButton("📢 OTP GROUP",
+                                                  url="https://t.me/aiitimens_otp"),
+                             InlineKeyboardButton("📢 Channel",
+                                                  url="https://t.me/alltime_ns")],
+                        ])
                 except Exception:
                     kb = None
                 for cid, _title in groups:
