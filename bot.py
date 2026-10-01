@@ -2636,9 +2636,6 @@ async def otp_poller(app):
                 kb = None
                 try:
                     _cbtns = []
-                    if cp.get("number"):
-                        _cbtns.append(InlineKeyboardButton(
-                            "📋 Number", copy_text=CopyTextButton(cp["number"])))
                     if cp.get("otp"):
                         _cbtns.append(InlineKeyboardButton(
                             "🔑 OTP", copy_text=CopyTextButton(cp["otp"])))
