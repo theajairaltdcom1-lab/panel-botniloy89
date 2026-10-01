@@ -501,9 +501,9 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await cmd_checker_status(update, ctx)
     elif "OTP Format" in text:
         cur = get_setting("otp_format", "v0.2")
-        set_setting("otp_format", "v0.1" if cur == "v0.2" else "v0.2")
-        await update.message.reply_text(f"OTP Format → {get_setting('otp_format', 'v0.2')}",
-                                        reply_markup=admin_menu())
+        nxt = {"v0.1": "v0.2", "v0.2": "v0.3", "v0.3": "v0.1"}.get(cur, "v0.2")
+        set_setting("otp_format", nxt)
+        await update.message.reply_text(f"OTP Format → {nxt}", reply_markup=admin_menu())
     elif text == "📱 Number Stock":
         await cmd_stock(update, ctx)
     elif text == "💸 Withdrawals":
@@ -2515,6 +2515,16 @@ def build_forward_text(flag: str, iso: str, app_name: str, svc_em: str,
     otp_t = otp if (otp and ov == "show") else ("••••" if otp else "-")
     if fmt == "v0.1":
         return f"🔔 {app_name}\n📱 {masked}\n🔐 OTP: {otp_t}"
+    if fmt == "v0.3":
+        lines = ["╭━━━〔 𝙎𝙔𝙍𝙭 • 𝙉𝙎 〕━━━╮",
+                 f"🌐 𝘾𝙊𝙐𝙉𝙏𝙍𝙔 : {flag} {iso}",
+                 f"📲 𝙎𝙀𝙍𝙑𝙄𝘾𝙀 : {svc_em} {app_name}",
+                 f"☎️ 𝙉𝙐𝙈𝘽𝙀𝙍  : {masked}",
+                 f"🔑 𝙊𝙏𝙋     : {otp_t}"]
+        if pd == "ON":
+            lines.append(f"📡 𝙋𝙍𝙀𝙁𝙄𝙓  : {prefix}")
+        lines.append("╰━━━〔 @shuvosaha007 〕━━━╯")
+        return "\n".join(lines)
     lines = ["◢◤ 𝙎𝙔𝙍𝙭_𝙊𝙏𝙋 ◥◣",
              f"🌍 COUNTRY › {flag} {iso}",
              f"💬 SERVICE › {svc_em} {app_name}",
