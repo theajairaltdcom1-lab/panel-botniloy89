@@ -1089,14 +1089,22 @@ async def cmd_panel_list(update, ctx):
         if admin:
             try: pp = r["ppass"]
             except Exception: pp = ""
-            lines.append(f"• {r['name']} [{r['status']}]\n  🔗 {url or '-'}\n  👤 {pu or '-'} | 🔑 {pp or '-'}\n  📝 {r['details'] or '-'}")
+            try: fl = r["flavor"] or "auto"
+            except Exception: fl = "?"
+            lines.append(f"• {r['name']} [{r['status']}] ({fl})\n  🔗 {url or '-'}\n  👤 {pu or '-'} | 🔑 {pp or '-'}\n  📝 {r['details'] or '-'}")
         else:
-            lines.append(f"• {r['name']} [{r['status']}]\n  🔗 {url or '-'}")
+            try: fl = r["flavor"] or "auto"
+            except Exception: fl = "?"
+            lines.append(f"• {r['name']} [{r['status']}] ({fl})\n  🔗 {url or '-'}")
     text = "📋 Panel List (unlimited):\n\n" + "\n\n".join(lines)
     kb = []
     for r in rows:
+        try:
+            fl = r["flavor"] or "auto"
+        except Exception:
+            fl = "?"
         if admin:
-            kb.append([InlineKeyboardButton(f"❌ {r['name']}", callback_data=f"delpanel:{r['id']}"),
+            kb.append([InlineKeyboardButton(f"❌ {r['name']} [{fl}]", callback_data=f"delpanel:{r['id']}"),
                        InlineKeyboardButton(f"🔄 {r['status']}", callback_data=f"togpanel:{r['id']}")])
             kb.append([InlineKeyboardButton(f"📊 {r['name']} CDR", callback_data=f"panelstats:{r['id']}"),
                        InlineKeyboardButton(f"📥 CSV", callback_data=f"panelcsv:{r['id']}")])
