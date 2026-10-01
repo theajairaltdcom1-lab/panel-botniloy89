@@ -2515,7 +2515,7 @@ def build_forward_text(flag: str, iso: str, app_name: str, svc_em: str,
     otp_t = otp if (otp and ov == "show") else ("••••" if otp else "-")
     if fmt == "v0.1":
         return f"🔔 {app_name}\n📱 {masked}\n🔐 OTP: {otp_t}"
-    lines = ["╭━━━〔     𝑨𝑳𝑳 𝑻𝑰𝑴𝑬 𝑵𝑺     〕━━━╮",
+    lines = ["╭━━━〔    𝑨𝑳𝑳 𝑻𝑰𝑴𝑬 𝑵𝑺    〕━━━╮",
              f"🌐 𝘾𝙊𝙐𝙉𝙏𝙍𝙔 : {flag} {iso}",
              f"📲 𝙎𝙀𝙍𝙑𝙄𝘾𝙀 : {svc_em} {app_name}",
              f"☎️ 𝙉𝙐𝙈𝘽𝙀𝙍  : {masked}",
