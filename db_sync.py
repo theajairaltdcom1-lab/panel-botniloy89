@@ -23,16 +23,19 @@ def _cfg():
         pat = os.environ.get("GH_PAT", "") or getattr(_c, "GH_PAT", "")
         repo = os.environ.get("GH_REPO", "") or getattr(_c, "GH_REPO", "")
         branch = os.environ.get("GH_BRANCH", "") or getattr(_c, "GH_BRANCH", "master")
-        return pat, repo, branch
+        bbranch = os.environ.get("GH_BACKUP_BRANCH", "") or getattr(_c, "GH_BACKUP_BRANCH", "db-backup")
+        return pat, repo, branch, bbranch
     except Exception:
-        return "", "", "master"
+        return "", "", "master", "db-backup"
 
 
-def _api(path: str, method: str = "GET", data=None):
-    pat, repo, branch = _cfg()
+def _api(path: str, method: str = "GET", data=None, branch: str = ""):
+    pat, repo, _, bbranch = _cfg()
     if not pat or not repo:
         return None
-    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    br = branch or bbranch
+    sep = "&" if "?" in path else "?"
+    url = f"https://api.github.com/repos/{repo}/contents/{path}{sep}ref={br}"
     body = json.dumps(data).encode() if data is not None else None
     req = urllib.request.Request(url, body, {
         "Authorization": f"Bearer {pat}", "User-Agent": "panel-bot",
@@ -46,6 +49,38 @@ def _api(path: str, method: str = "GET", data=None):
     except Exception as e:
         log.warning("dbsync api fail: %s", str(e)[:100])
         return None
+
+
+def _ensure_branch() -> bool:
+    pat, repo, branch, bbranch = _cfg()
+    if not pat or not repo:
+        return False
+    base = f"https://api.github.com/repos/{repo}"
+    hdrs = {"Authorization": f"Bearer {pat}", "User-Agent": "panel-bot",
+            "Accept": "application/vnd.github+json", "Content-Type": "application/json"}
+
+    def call(url, method="GET", data=None):
+        body = json.dumps(data).encode() if data is not None else None
+        req = urllib.request.Request(url, body, hdrs)
+        if method != "GET":
+            req.get_method = lambda: method
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.load(r)
+        except Exception:
+            return None
+
+    if call(f"{base}/git/ref/heads/{bbranch}"):
+        return True
+    master = call(f"{base}/git/ref/heads/{branch}")
+    if not master:
+        return False
+    sha = ((master or {}).get("object") or {}).get("sha", "")
+    if not sha:
+        return False
+    r = call(f"{base}/git/refs", "POST",
+             {"ref": f"refs/heads/{bbranch}", "sha": sha})
+    return bool(r)
 
 
 def pull_db() -> bool:
@@ -87,9 +122,15 @@ def push_db(force: bool = False) -> bool:
         return False
     cur = _api(REMOTE_PATH)
     sha = (cur or {}).get("sha", "")
+    if not sha and not _ensure_branch():
+        return False
+    if not sha:
+        cur = _api(REMOTE_PATH)
+        sha = (cur or {}).get("sha", "")
+    _pat, _repo, _br, _bbr = _cfg()
     payload = {"message": f"db backup {time.strftime('%Y-%m-%d %H:%M:%S')}",
                "content": base64.b64encode(raw).decode(),
-               "branch": _cfg()[2]}
+               "branch": _bbr}
     if sha:
         payload["sha"] = sha
     r = _api(REMOTE_PATH, method="PUT", data=payload)
