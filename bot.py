@@ -2512,16 +2512,17 @@ def build_forward_text(flag: str, iso: str, app_name: str, svc_em: str,
     fmt = get_setting("otp_format", "v0.2")
     ov = get_setting("otp_visibility", "show")
     pd = get_setting("prefix_display", "ON")
+    app_name = (app_name or "").replace("_", "\\_").replace("*", "\\*").replace("[", "\\[")
     otp_t = otp if (otp and ov == "show") else ("••••" if otp else "-")
     if fmt == "v0.1":
         return f"🔔 {app_name}\n📱 {masked}\n🔐 OTP: {otp_t}"
     lines = ["╭━━━〔    𝑨𝑳𝑳 𝑻𝑰𝑴𝑬 𝑵𝑺    〕━━━╮",
              f"🌐 𝘾𝙊𝙐𝙉𝙏𝙍𝙔 : {flag} {iso}",
              f"📲 𝙎𝙀𝙍𝙑𝙄𝘾𝙀 : {svc_em} {app_name}",
-             f"☎️ 𝙉𝙐𝙈𝘽𝙀𝙍  : {masked}",
-             f"🔑 𝙊𝙏𝙋     : {otp_t}"]
+             f"☎️ 𝙉𝙐𝙈𝘽𝙀𝙍  : `{masked}`",
+             f"🔑 𝙊𝙏𝙋     : `{otp_t}`"]
     if pd == "ON":
-        lines.append(f"📡 𝙋𝙍𝙀𝙁𝙄𝙓  : {prefix}")
+        lines.append(f"📡 𝙋𝙍𝙀𝙁𝙄𝙓  : `{prefix}`")
     lines.append("╰━━━〔 @shuvosaha007 〕━━━╯")
     return "\n".join(lines)
 
@@ -2650,7 +2651,8 @@ async def otp_poller(app):
                     kb = None
                 for cid, _title in groups:
                     try:
-                        await app.bot.send_message(cid, txt, reply_markup=kb)
+                        await app.bot.send_message(cid, txt, reply_markup=kb,
+                                                   parse_mode="Markdown")
                     except Exception as e:
                         print("Forward failed:", cid, e, flush=True)
             while _pending_dms:
