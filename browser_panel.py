@@ -13,6 +13,27 @@ _state: dict = {}
 _started = False
 _start_lock = threading.Lock()
 
+_LAUNCH_ARGS = ["--no-sandbox", "--disable-dev-shm-usage",
+                "--disable-gpu", "--no-zygote", "--single-process"]
+
+
+async def _launch(pw):
+    try:
+        return await pw.chromium.launch(channel="chrome", headless=True,
+                                       args=_LAUNCH_ARGS)
+    except Exception:
+        try:
+            return await pw.chromium.launch(headless=True, args=_LAUNCH_ARGS)
+        except Exception:
+            import subprocess as _sp
+            import sys as _sys
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(
+                None, lambda: _sp.run(
+                    [_sys.executable, "-m", "playwright", "install", "chromium"],
+                    timeout=600))
+            return await pw.chromium.launch(headless=True, args=_LAUNCH_ARGS)
+
 
 def _worker():
     loop = asyncio.new_event_loop()
@@ -21,20 +42,7 @@ def _worker():
     async def init():
         from playwright.async_api import async_playwright
         _state["pw"] = await async_playwright().start()
-        try:
-            _state["browser"] = await _state["pw"].chromium.launch(
-                channel="chrome", headless=True)
-        except Exception:
-            try:
-                _state["browser"] = await _state["pw"].chromium.launch(headless=True)
-            except Exception:
-                import subprocess as _sp
-                import sys as _sys
-                await loop.run_in_executor(
-                    None, lambda: _sp.run(
-                        [_sys.executable, "-m", "playwright", "install", "chromium"],
-                        timeout=600))
-                _state["browser"] = await _state["pw"].chromium.launch(headless=True)
+        _state["browser"] = await _launch(_state["pw"])
         _state["pages"] = {}
         _state["loop"] = loop
 
@@ -101,8 +109,7 @@ async def _do_login(base_url: str, username: str, password: str) -> bool:
     if "/login" not in (pg.url or ""):
         return True
     users = await pg.query_selector_all(
-        'input[aria-label="Username"], input[name="username"], '
-        'input[placeholder="Username"]')
+        'input[aria-label="Username"], input[name="username"], input[placeholder="Username"]')
     if not users:
         users = [e for e in await pg.query_selector_all('input[type="text"]')
                  if await e.is_visible()]
@@ -173,12 +180,10 @@ async def _do_fetch(base_url: str, username: str, password: str,
             except Exception:
                 pass
             await pg.keyboard.press("Escape")
-            clicked = False
             for _sel in ("text=Show Report", "text=Search", "text=Filter",
                          "text=Apply", "text=Show"):
                 try:
                     await pg.click(_sel, force=True, timeout=2500)
-                    clicked = True
                     break
                 except Exception:
                     continue
@@ -211,13 +216,19 @@ async def _do_fetch(base_url: str, username: str, password: str,
     return rows
 
 
+def _err(e: BaseException) -> str:
+    name = type(e).__name__
+    msg = str(e).strip()[:200]
+    return f"{name}: {msg}" if msg else name
+
+
 def browser_login(base_url: str, username: str, password: str) -> bool:
     try:
         return _run(_do_login, base_url, username, password)
     except RuntimeError:
         raise
     except Exception as e:
-        raise RuntimeError(f"browser fail: {str(e)[:120]}")
+        raise RuntimeError(f"browser fail [{_err(e)}]")
 
 
 def browser_fetch_cdr(base_url: str, username: str, password: str,
@@ -228,4 +239,4 @@ def browser_fetch_cdr(base_url: str, username: str, password: str,
     except RuntimeError:
         raise
     except Exception as e:
-        raise RuntimeError(f"browser fetch fail: {str(e)[:120]}")
+        raise RuntimeError(f"browser fetch fail [{_err(e)}]")
