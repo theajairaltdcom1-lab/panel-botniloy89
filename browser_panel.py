@@ -95,17 +95,23 @@ async def _do_login(base_url: str, username: str, password: str) -> bool:
     pg = await _get_page(key)
     await _goto(pg, base_url.rstrip("/") + "/login")
     try:
-        await pg.wait_for_selector(
-            'input[type="password"]', timeout=12000)
+        await pg.wait_for_selector('input[type="password"]', timeout=12000)
     except Exception:
         pass
     if "/login" not in (pg.url or ""):
         return True
     users = await pg.query_selector_all(
-        'input[aria-label="Username"], input[name="username"], input[placeholder="Username"]')
+        'input[aria-label="Username"], input[name="username"], '
+        'input[placeholder="Username"]')
+    if not users:
+        users = [e for e in await pg.query_selector_all('input[type="text"]')
+                 if await e.is_visible()]
     pwds = await pg.query_selector_all(
         'input[aria-label="Password"], input[name="password"], '
         'input[type="password"], input[placeholder="Password"]')
+    if not pwds:
+        pwds = [e for e in await pg.query_selector_all('input[type="password"]')
+                if await e.is_visible()]
     if not users or not pwds:
         raise RuntimeError("login form পাওয়া যায়নি")
     await users[0].fill(username)
@@ -113,7 +119,19 @@ async def _do_login(base_url: str, username: str, password: str) -> bool:
     try:
         await pg.click('button[type="submit"]', timeout=5000)
     except Exception:
-        await pg.keyboard.press("Enter")
+        try:
+            btns = await pg.query_selector_all("button")
+            clicked = False
+            for b in btns:
+                t = ((await b.inner_text()) or "").strip().lower()
+                if t in ("sign in", "login", "continue", "submit"):
+                    await b.click(timeout=3000)
+                    clicked = True
+                    break
+            if not clicked:
+                await pg.keyboard.press("Enter")
+        except Exception:
+            await pg.keyboard.press("Enter")
     try:
         await pg.wait_for_function(
             "() => !window.location.pathname.includes('/login')", timeout=15000)
@@ -149,13 +167,21 @@ async def _do_fetch(base_url: str, username: str, password: str,
             await pg.wait_for_timeout(5000)
         inputs = await pg.query_selector_all("input[type='text']")
         if len(inputs) >= 2:
-            await inputs[0].fill(fdate1)
-            await inputs[1].fill(fdate2)
-            await pg.keyboard.press("Escape")
             try:
-                await pg.click("text=Show Report", force=True, timeout=8000)
+                await inputs[0].fill(fdate1)
+                await inputs[1].fill(fdate2)
             except Exception:
                 pass
+            await pg.keyboard.press("Escape")
+            clicked = False
+            for _sel in ("text=Show Report", "text=Search", "text=Filter",
+                         "text=Apply", "text=Show"):
+                try:
+                    await pg.click(_sel, force=True, timeout=2500)
+                    clicked = True
+                    break
+                except Exception:
+                    continue
             await pg.wait_for_timeout(7000)
     finally:
         try:
